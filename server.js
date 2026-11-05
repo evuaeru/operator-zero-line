@@ -234,7 +234,8 @@ class Room {
 const rooms = new Map();
 
 function getOrCreateRoom(roomId) {
-  const cleanId = (roomId || 'ALPHA_HQ').trim().toUpperCase();
+  const trimmed = typeof roomId === 'string' ? roomId.trim().toUpperCase() : '';
+  const cleanId = trimmed !== '' ? trimmed : 'ALPHA_HQ';
   if (!rooms.has(cleanId)) {
     rooms.set(cleanId, new Room(cleanId));
   }
@@ -260,18 +261,37 @@ wss.on('connection', (ws) => {
           if (!ws.roomId || !rooms.has(ws.roomId)) return;
           const room = rooms.get(ws.roomId);
           const p = room.players.get(ws.playerId);
-          if (p) {
+          if (p && !p.isDead) {
             p.x = data.x;
             p.y = data.y;
             p.angle = data.angle;
             p.vx = data.vx;
             p.vy = data.vy;
-            p.hp = data.hp;
-            p.shield = data.shield;
             p.isWalking = data.isWalking;
             p.walkCycle = data.walkCycle;
             p.weapon = data.weapon;
-            p.isDead = data.isDead;
+          }
+          break;
+        }
+
+        case 'respawn': {
+          if (!ws.roomId || !rooms.has(ws.roomId)) return;
+          const room = rooms.get(ws.roomId);
+          const p = room.players.get(ws.playerId);
+          if (p) {
+            const sp = room.map.getRandomSpawnPoint();
+            p.x = sp.x;
+            p.y = sp.y;
+            p.angle = sp.angle;
+            p.hp = GameConfig.PLAYER.MAX_HP;
+            p.shield = GameConfig.PLAYER.MAX_SHIELD;
+            p.isDead = false;
+            ws.send(JSON.stringify({
+              type: 'respawned',
+              spawn: sp,
+              hp: p.hp,
+              shield: p.shield
+            }));
           }
           break;
         }
@@ -291,15 +311,27 @@ wss.on('connection', (ws) => {
 
           // Check if target is a player
           let target = room.players.get(data.targetId);
+          let targetWs = null;
+          if (target) {
+            for (const c of room.clients) {
+              if (c.playerId === target.id) {
+                targetWs = c;
+                break;
+              }
+            }
+          }
+
           // Or bot
+          let isBot = false;
           if (!target) {
             target = room.bots.find(b => b.id === data.targetId);
+            if (target) isBot = true;
           }
 
           if (target && !target.isDead) {
-            const hitResult = target.takeDamage ? target.takeDamage(data.damage, ws.playerId) : null;
-            if (!hitResult && typeof target.hp === 'number') {
-              // Direct player state update
+            const hitResult = isBot && target.takeDamage ? target.takeDamage(data.damage, ws.playerId) : null;
+            if (!isBot && typeof target.hp === 'number') {
+              // Direct player state update on authoritative server
               let rem = data.damage;
               if (target.shield > 0) {
                 const abs = Math.min(target.shield, rem * 0.7);
@@ -307,6 +339,7 @@ wss.on('connection', (ws) => {
                 rem -= abs;
               }
               target.hp -= rem;
+
               if (target.hp <= 0) {
                 target.hp = 0;
                 target.isDead = true;
@@ -322,7 +355,19 @@ wss.on('connection', (ws) => {
                   });
                 }
               }
-            } else if (hitResult && hitResult.killed) {
+
+              // Notify the victim immediately of damage taken
+              if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+                targetWs.send(JSON.stringify({
+                  type: 'damage_taken',
+                  damage: data.damage,
+                  attackerId: ws.playerId,
+                  hp: target.hp,
+                  shield: target.shield,
+                  isDead: target.isDead
+                }));
+              }
+            } else if (isBot && hitResult && hitResult.killed) {
               if (attacker) {
                 attacker.kills++;
                 attacker.score += 100;
@@ -332,6 +377,126 @@ wss.on('connection', (ws) => {
                   victimName: target.name,
                   weapon: data.weapon || 'RIFLE'
                 });
+              }
+            }
+          }
+          break;
+        }
+
+        case 'pickup_item': {
+          if (!ws.roomId || !rooms.has(ws.roomId)) return;
+          const room = rooms.get(ws.roomId);
+          const p = room.players.get(ws.playerId);
+          if (!p || p.isDead) return;
+
+          const item = room.map.itemSpawns.find(it => it.id === data.itemId);
+          if (item && item.active) {
+            const dist = Math.hypot(p.x - item.x, p.y - item.y);
+            if (dist < 140) {
+              item.active = false;
+              setTimeout(() => {
+                item.active = true;
+              }, item.respawnTime || 20000);
+
+              if (item.type === 'medkit') {
+                p.hp = Math.min(GameConfig.PLAYER.MAX_HP, p.hp + 50);
+              } else if (item.type === 'shield') {
+                p.shield = Math.min(GameConfig.PLAYER.MAX_SHIELD, p.shield + 50);
+              }
+
+              room.broadcast({
+                type: 'item_picked',
+                itemId: item.id,
+                playerId: ws.playerId,
+                itemType: item.type,
+                weapon: item.weapon
+              });
+            }
+          }
+          break;
+        }
+
+        case 'barrel_hit': {
+          if (!ws.roomId || !rooms.has(ws.roomId)) return;
+          const room = rooms.get(ws.roomId);
+          const barrel = room.map.barrels.find(b => b.id === data.barrelId);
+          if (barrel && !barrel.exploded) {
+            barrel.hp -= data.damage;
+            if (barrel.hp <= 0) {
+              barrel.exploded = true;
+              room.map.rebuildSegments();
+
+              room.broadcast({
+                type: 'barrel_exploded',
+                barrelId: barrel.id,
+                x: barrel.x,
+                y: barrel.y,
+                shooterId: data.shooterId
+              });
+
+              // Apply explosion splash damage to entities
+              const blastR = 140;
+              const maxDmg = 90;
+              const attacker = room.players.get(data.shooterId);
+
+              for (const c of room.clients) {
+                const targetPlayer = room.players.get(c.playerId);
+                if (!targetPlayer || targetPlayer.isDead) continue;
+                const d = Math.hypot(targetPlayer.x - barrel.x, targetPlayer.y - barrel.y);
+                if (d < blastR) {
+                  const dmg = Math.round(maxDmg * (1 - d / blastR));
+                  let rem = dmg;
+                  if (targetPlayer.shield > 0) {
+                    const abs = Math.min(targetPlayer.shield, rem * 0.7);
+                    targetPlayer.shield -= abs;
+                    rem -= abs;
+                  }
+                  targetPlayer.hp -= rem;
+                  if (targetPlayer.hp <= 0) {
+                    targetPlayer.hp = 0;
+                    targetPlayer.isDead = true;
+                    targetPlayer.deaths++;
+                    if (attacker && attacker.id !== targetPlayer.id) {
+                      attacker.kills++;
+                      attacker.score += 100;
+                    }
+                    room.broadcast({
+                      type: 'kill',
+                      killerName: attacker ? attacker.name : 'Explosive Barrel',
+                      victimName: targetPlayer.name,
+                      weapon: 'BARREL'
+                    });
+                  }
+                  if (c.readyState === WebSocket.OPEN) {
+                    c.send(JSON.stringify({
+                      type: 'damage_taken',
+                      damage: dmg,
+                      attackerId: data.shooterId,
+                      hp: targetPlayer.hp,
+                      shield: targetPlayer.shield,
+                      isDead: targetPlayer.isDead
+                    }));
+                  }
+                }
+              }
+
+              for (const bot of room.bots) {
+                if (bot.isDead) continue;
+                const d = Math.hypot(bot.x - barrel.x, bot.y - barrel.y);
+                if (d < blastR) {
+                  const dmg = Math.round(maxDmg * (1 - d / blastR));
+                  const hitRes = bot.takeDamage(dmg, data.shooterId);
+                  if (hitRes && hitRes.killed && attacker) {
+                    attacker.kills++;
+                    attacker.score += 100;
+                    room.broadcast({
+                      type: 'kill',
+                      killerName: attacker.name,
+                      victimName: bot.name,
+                      weapon: 'BARREL'
+                    });
+                  }
+                }
               }
             }
           }
@@ -376,11 +541,15 @@ wss.on('connection', (ws) => {
   });
 });
 
-// Start HTTP & WS Server
-server.listen(PORT, () => {
-  console.log(`=======================================================`);
-  console.log(` OPERATOR: ZERO LINE Tactical Multiplayer Server Active`);
-  console.log(` Local URL: http://localhost:${PORT}`);
-  console.log(` Room Link Example: http://localhost:${PORT}/?room=SQUAD1`);
-  console.log(`=======================================================`);
-});
+// Start HTTP & WS Server only if not loaded as module in tests
+if (require.main === module) {
+  server.listen(PORT, () => {
+    console.log(`=======================================================`);
+    console.log(` OPERATOR: ZERO LINE Tactical Multiplayer Server Active`);
+    console.log(` Local URL: http://localhost:${PORT}`);
+    console.log(` Room Link Example: http://localhost:${PORT}/?room=SQUAD1`);
+    console.log(`=======================================================`);
+  });
+}
+
+module.exports = { app, server, Room, rooms, getOrCreateRoom };

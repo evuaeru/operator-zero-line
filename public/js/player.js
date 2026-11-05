@@ -103,13 +103,17 @@
       this.shield = Math.min(this.maxShield, this.shield + amount);
     }
 
-    update(inputState, map, soundManager, now, dt = 1 / 60) {
+    update(inputState, map, soundManager, now, dt = 1 / 60, network = null) {
       if (this.isDead) {
         if (this.respawnTimer > 0) {
           this.respawnTimer -= dt * 1000;
           if (this.respawnTimer <= 0) {
-            const sp = map.getRandomSpawnPoint();
-            this.respawn(sp);
+            if (network && !network.isOfflineMode) {
+              network.sendRespawn();
+            } else {
+              const sp = map.getRandomSpawnPoint();
+              this.respawn(sp);
+            }
           }
         }
         return;
@@ -195,26 +199,30 @@
 
         const dist = Math.hypot(this.x - item.x, this.y - item.y);
         if (dist < this.radius + 18) {
-          if (item.type === 'medkit' && this.hp < this.maxHp) {
-            this.heal(50);
-            item.active = false;
-            setTimeout(() => { item.active = true; }, item.respawnTime);
-            if (soundManager) soundManager.playPickup();
-          } else if (item.type === 'shield' && this.shield < this.maxShield) {
-            this.addShield(50);
-            item.active = false;
-            setTimeout(() => { item.active = true; }, item.respawnTime);
-            if (soundManager) soundManager.playPickup();
-          } else if (item.type === 'ammo') {
-            this.weaponManager.addAmmo(0.6);
-            item.active = false;
-            setTimeout(() => { item.active = true; }, item.respawnTime);
-            if (soundManager) soundManager.playPickup();
-          } else if (item.type === 'weapon' && item.weapon) {
-            this.weaponManager.unlockWeapon(item.weapon);
-            item.active = false;
-            setTimeout(() => { item.active = true; }, item.respawnTime);
-            if (soundManager) soundManager.playPickup();
+          if (network && !network.isOfflineMode) {
+            network.sendPickupItem(item.id);
+          } else {
+            if (item.type === 'medkit' && this.hp < this.maxHp) {
+              this.heal(50);
+              item.active = false;
+              setTimeout(() => { item.active = true; }, item.respawnTime);
+              if (soundManager) soundManager.playPickup();
+            } else if (item.type === 'shield' && this.shield < this.maxShield) {
+              this.addShield(50);
+              item.active = false;
+              setTimeout(() => { item.active = true; }, item.respawnTime);
+              if (soundManager) soundManager.playPickup();
+            } else if (item.type === 'ammo') {
+              this.weaponManager.addAmmo(0.6);
+              item.active = false;
+              setTimeout(() => { item.active = true; }, item.respawnTime);
+              if (soundManager) soundManager.playPickup();
+            } else if (item.type === 'weapon' && item.weapon) {
+              this.weaponManager.unlockWeapon(item.weapon);
+              item.active = false;
+              setTimeout(() => { item.active = true; }, item.respawnTime);
+              if (soundManager) soundManager.playPickup();
+            }
           }
         }
       }

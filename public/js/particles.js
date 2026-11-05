@@ -167,54 +167,51 @@
     }
 
     render(ctx, viewX, viewY, viewW, viewH) {
-      // 1. Render Explosions
+      // 1. Render Explosions (World coordinates)
       ctx.save();
       for (let i = 0; i < this.explosions.length; i++) {
         const ex = this.explosions[i];
-        const sx = ex.x - viewX;
-        const sy = ex.y - viewY;
+        if (ex.x + ex.radius < viewX || ex.x - ex.radius > viewX + viewW ||
+            ex.y + ex.radius < viewY || ex.y - ex.radius > viewY + viewH) continue;
 
         // Shockwave ring
         ctx.strokeStyle = `rgba(251, 146, 60, ${ex.alpha})`;
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.arc(sx, sy, ex.radius, 0, Math.PI * 2);
+        ctx.arc(ex.x, ex.y, ex.radius, 0, Math.PI * 2);
         ctx.stroke();
 
         // Core flash
-        const coreGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, ex.radius * 0.7);
+        const coreGrad = ctx.createRadialGradient(ex.x, ex.y, 0, ex.x, ex.y, ex.radius * 0.7);
         coreGrad.addColorStop(0, `rgba(255, 255, 255, ${ex.alpha})`);
         coreGrad.addColorStop(0.3, `rgba(245, 158, 11, ${ex.alpha * 0.8})`);
         coreGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
         ctx.fillStyle = coreGrad;
         ctx.beginPath();
-        ctx.arc(sx, sy, ex.radius * 0.7, 0, Math.PI * 2);
+        ctx.arc(ex.x, ex.y, ex.radius * 0.7, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();
 
-      // 2. Render Particles
+      // 2. Render Particles (World coordinates)
       ctx.save();
       for (let i = 0; i < this.particles.length; i++) {
         const p = this.particles[i];
-        const sx = p.x - viewX;
-        const sy = p.y - viewY;
-        if (sx < -20 || sx > viewW + 20 || sy < -20 || sy > viewH + 20) continue;
+        if (p.x < viewX - 20 || p.x > viewX + viewW + 20 || p.y < viewY - 20 || p.y > viewY + viewH + 20) continue;
 
         ctx.globalAlpha = Math.max(0, p.alpha);
         ctx.fillStyle = p.color;
         ctx.beginPath();
-        ctx.arc(sx, sy, p.size, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();
 
-      // 3. Render Floating Damage Numbers
+      // 3. Render Floating Damage Numbers (World coordinates)
       ctx.save();
       for (let i = 0; i < this.damageNumbers.length; i++) {
         const dn = this.damageNumbers[i];
-        const sx = dn.x - viewX;
-        const sy = dn.y - viewY;
+        if (dn.x < viewX - 40 || dn.x > viewX + viewW + 40 || dn.y < viewY - 40 || dn.y > viewY + viewH + 40) continue;
 
         ctx.globalAlpha = Math.max(0, dn.alpha);
         ctx.font = `bold ${dn.size}px monospace`;
@@ -222,7 +219,7 @@
         ctx.shadowColor = '#000000';
         ctx.shadowBlur = 4;
         ctx.textAlign = 'center';
-        ctx.fillText(dn.text, sx, sy);
+        ctx.fillText(dn.text, dn.x, dn.y);
       }
       ctx.restore();
     }

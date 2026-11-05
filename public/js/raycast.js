@@ -238,52 +238,56 @@
 
       ctx.save();
 
-      // 1. Draw exploration shroud (fog of war memory) across screen
+      // 1. Draw exploration shroud (fog of war memory) across world
       if (this.explorationCanvas) {
         ctx.save();
         ctx.globalAlpha = 0.88; // Explored areas appear dimmed under shroud
         ctx.drawImage(
           this.explorationCanvas,
           0, 0, this.explorationCanvas.width, this.explorationCanvas.height,
-          -viewX, -viewY, mapW, mapH
+          0, 0, mapW, mapH
         );
         ctx.restore();
       }
 
-      // 2. Create offscreen or composite fog mask over viewport
-      // Cut out the current direct line-of-sight polygon
-      // We fill viewport with dark tactical darkness, then 'destination-out' the polygon!
-      const screenPoly = poly.map(p => ({ x: p.x - viewX, y: p.y - viewY }));
-      const px = player.x - viewX;
-      const py = player.y - viewY;
-
-      // Create a temporary canvas for fog masking if needed, or use clipped overlay
-      // Using clip + inverse rect or soft flashlight gradient:
+      // 2. Tactical Darkness Mask outside current direct Line-of-Sight
+      // Darkens all areas of the camera viewport that are not inside the vision polygon
       ctx.save();
+      ctx.beginPath();
+      // Outer rect covering the current camera viewport in world space
+      ctx.rect(viewX - 20, viewY - 20, viewW + 40, viewH + 40);
+      // Inner visibility polygon cutout
+      ctx.moveTo(poly[0].x, poly[0].y);
+      for (let i = 1; i < poly.length; i++) {
+        ctx.lineTo(poly[i].x, poly[i].y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(7, 10, 16, 0.72)';
+      ctx.fill('evenodd');
+      ctx.restore();
 
-      // Flashlight / Vision cone volumetric glow
-      const coneGrad = ctx.createRadialGradient(px, py, 20, px, py, player.visionRange);
+      // 3. Volumetric Vision Cone / Flashlight Illumination
+      ctx.save();
+      const coneGrad = ctx.createRadialGradient(player.x, player.y, 20, player.x, player.y, player.visionRange);
       if (flashlightOn) {
-        coneGrad.addColorStop(0, 'rgba(235, 245, 255, 0.18)');
-        coneGrad.addColorStop(0.4, 'rgba(215, 235, 255, 0.08)');
+        coneGrad.addColorStop(0, 'rgba(235, 245, 255, 0.16)');
+        coneGrad.addColorStop(0.4, 'rgba(215, 235, 255, 0.07)');
         coneGrad.addColorStop(0.8, 'rgba(180, 210, 240, 0.02)');
         coneGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       } else {
-        coneGrad.addColorStop(0, 'rgba(180, 220, 255, 0.06)');
-        coneGrad.addColorStop(0.6, 'rgba(120, 160, 220, 0.02)');
+        coneGrad.addColorStop(0, 'rgba(180, 220, 255, 0.05)');
+        coneGrad.addColorStop(0.6, 'rgba(120, 160, 220, 0.015)');
         coneGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       }
 
-      // Draw subtle vision illumination
       ctx.fillStyle = coneGrad;
       ctx.beginPath();
-      ctx.moveTo(px, py);
-      for (let i = 0; i < screenPoly.length; i++) {
-        ctx.lineTo(screenPoly[i].x, screenPoly[i].y);
+      ctx.moveTo(player.x, player.y);
+      for (let i = 0; i < poly.length; i++) {
+        ctx.lineTo(poly[i].x, poly[i].y);
       }
       ctx.closePath();
       ctx.fill();
-
       ctx.restore();
 
       ctx.restore();

@@ -31,6 +31,12 @@
       this.onJoinedRoom = null;
       this.onKillEvent = null;
       this.onChatEvent = null;
+      this.onShootEvent = null;
+      this.onDamageTakenEvent = null;
+      this.onItemPickedEvent = null;
+      this.onBarrelExplodedEvent = null;
+      this.onRespawnedEvent = null;
+      this.onLocalStatsSync = null;
     }
 
     init(roomCode, playerName, playerColor, onJoined) {
@@ -119,12 +125,9 @@
         angle: Math.round(player.angle * 100) / 100,
         vx: Math.round(player.vx * 10) / 10,
         vy: Math.round(player.vy * 10) / 10,
-        hp: player.hp,
-        shield: player.shield,
         isWalking: player.isWalking,
         walkCycle: player.walkCycle,
-        weapon: player.weaponManager.currentWeaponKey,
-        isDead: player.isDead
+        weapon: player.weaponManager.currentWeaponKey
       });
     }
 
@@ -143,6 +146,31 @@
         targetId: targetId,
         damage: damage,
         weapon: weaponType
+      });
+    }
+
+    sendPickupItem(itemId) {
+      if (!this.connected) return;
+      this.send({
+        type: 'pickup_item',
+        itemId: itemId
+      });
+    }
+
+    sendBarrelHit(barrelId, damage, shooterId) {
+      if (!this.connected) return;
+      this.send({
+        type: 'barrel_hit',
+        barrelId: barrelId,
+        damage: damage,
+        shooterId: shooterId
+      });
+    }
+
+    sendRespawn() {
+      if (!this.connected) return;
+      this.send({
+        type: 'respawn'
       });
     }
 
@@ -183,6 +211,26 @@
             this.syncGameState(msg);
             break;
 
+          case 'shoot':
+            if (this.onShootEvent) this.onShootEvent(msg.bullets);
+            break;
+
+          case 'damage_taken':
+            if (this.onDamageTakenEvent) this.onDamageTakenEvent(msg);
+            break;
+
+          case 'item_picked':
+            if (this.onItemPickedEvent) this.onItemPickedEvent(msg);
+            break;
+
+          case 'barrel_exploded':
+            if (this.onBarrelExplodedEvent) this.onBarrelExplodedEvent(msg);
+            break;
+
+          case 'respawned':
+            if (this.onRespawnedEvent) this.onRespawnedEvent(msg);
+            break;
+
           case 'kill':
             this.killFeed.unshift(msg);
             if (this.killFeed.length > 5) this.killFeed.pop();
@@ -201,6 +249,12 @@
     }
 
     syncGameState(msg) {
+      // Sync local player stats if available
+      const localSnap = msg.players ? msg.players.find(p => p.id === this.playerId) : null;
+      if (localSnap && this.onLocalStatsSync) {
+        this.onLocalStatsSync(localSnap);
+      }
+
       // Sync players
       const activeIds = new Set();
       for (const p of msg.players) {

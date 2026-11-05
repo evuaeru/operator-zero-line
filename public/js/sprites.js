@@ -425,9 +425,9 @@
     }
 
     renderLegs(ctx, walkCycle) {
-      const legStride = Math.sin(walkCycle) * 10;
-      const legWidth = 7;
-      const legLength = 16;
+      const legStride = Math.sin(walkCycle) * 9;
+      const legWidth = 15;
+      const legHeight = 7;
 
       ctx.fillStyle = '#1e293b'; // Tactical pants
       ctx.strokeStyle = '#0f172a';
@@ -435,22 +435,24 @@
 
       // Left leg
       ctx.save();
-      ctx.translate(-9, -legStride);
-      ctx.fillRect(-legWidth / 2, 0, legWidth, legLength);
-      ctx.strokeRect(-legWidth / 2, 0, legWidth, legLength);
-      // Boot toe
+      ctx.translate(-legStride - 4, -10);
+      ctx.beginPath();
+      ctx.roundRect(-legWidth / 2, -legHeight / 2, legWidth, legHeight, 2);
+      ctx.fill();
+      ctx.stroke();
       ctx.fillStyle = '#090d16';
-      ctx.fillRect(-legWidth / 2, legLength - 3, legWidth, 4);
+      ctx.fillRect(legWidth / 2 - 3, -legHeight / 2, 3, legHeight);
       ctx.restore();
 
       // Right leg
       ctx.save();
-      ctx.translate(9, legStride);
-      ctx.fillRect(-legWidth / 2, 0, legWidth, legLength);
-      ctx.strokeRect(-legWidth / 2, 0, legWidth, legLength);
-      // Boot toe
+      ctx.translate(legStride - 4, 10);
+      ctx.beginPath();
+      ctx.roundRect(-legWidth / 2, -legHeight / 2, legWidth, legHeight, 2);
+      ctx.fill();
+      ctx.stroke();
       ctx.fillStyle = '#090d16';
-      ctx.fillRect(-legWidth / 2, legLength - 3, legWidth, 4);
+      ctx.fillRect(legWidth / 2 - 3, -legHeight / 2, 3, legHeight);
       ctx.restore();
     }
 
@@ -465,45 +467,46 @@
 
       // Left shoulder
       ctx.beginPath();
-      ctx.roundRect(-19, -8, 8, 14, 3);
+      ctx.roundRect(-8, -19, 14, 8, 3);
       ctx.fill();
       ctx.stroke();
 
       // Right shoulder
       ctx.beginPath();
-      ctx.roundRect(11, -8, 8, 14, 3);
+      ctx.roundRect(-8, 11, 14, 8, 3);
       ctx.fill();
       ctx.stroke();
 
       // Tactical Vest Body
-      const vestGrad = ctx.createLinearGradient(0, -14, 0, 14);
-      vestGrad.addColorStop(0, primary);
+      const vestGrad = ctx.createLinearGradient(-14, 0, 14, 0);
+      vestGrad.addColorStop(0, secondary);
+      vestGrad.addColorStop(0.5, primary);
       vestGrad.addColorStop(1, secondary);
       ctx.fillStyle = vestGrad;
       ctx.beginPath();
-      ctx.roundRect(-13, -12, 26, 24, 6);
+      ctx.roundRect(-12, -13, 24, 26, 6);
       ctx.fill();
       ctx.stroke();
 
       // Tactical vest webbing / molle pouches
       ctx.fillStyle = '#0f172a';
-      ctx.fillRect(-8, -4, 5, 10);
-      ctx.fillRect(3, -4, 5, 10);
+      ctx.fillRect(-4, -8, 10, 5);
+      ctx.fillRect(-4, 3, 10, 5);
 
       // Radio antenna on left shoulder
       ctx.strokeStyle = '#475569';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(-12, -4);
-      ctx.lineTo(-18, -12);
+      ctx.moveTo(-4, -12);
+      ctx.lineTo(-12, -18);
       ctx.stroke();
     }
 
     renderArmsAndWeapon(ctx, colorData, weapon, isShooting) {
-      const recoilOffset = isShooting ? -weapon.recoilKick : 0;
+      const recoilOffset = isShooting ? -(weapon.recoilKick || 3) : 0;
 
       ctx.save();
-      ctx.translate(0, recoilOffset);
+      ctx.translate(recoilOffset, 0);
 
       // Draw Weapon Model
       this.renderWeaponModel(ctx, weapon, isShooting);
@@ -515,13 +518,13 @@
 
       // Left hand (foregrip / barrel hold)
       ctx.beginPath();
-      ctx.arc(6, 18, 4.5, 0, Math.PI * 2);
+      ctx.arc(18, 4, 4.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
       // Right hand (trigger hold)
       ctx.beginPath();
-      ctx.arc(7, 4, 4.5, 0, Math.PI * 2);
+      ctx.arc(8, 7, 4.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
@@ -529,8 +532,8 @@
       ctx.strokeStyle = colorData.primary || '#2563eb';
       ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.moveTo(-14, 0); ctx.lineTo(4, 18); // Left arm
-      ctx.moveTo(14, 0);  ctx.lineTo(8, 4);  // Right arm
+      ctx.moveTo(0, -14); ctx.lineTo(18, 4); // Left arm
+      ctx.moveTo(0, 14);  ctx.lineTo(8, 7);   // Right arm
       ctx.stroke();
 
       ctx.restore();
@@ -540,59 +543,59 @@
       const wId = (weapon && weapon.id) || 'rifle';
 
       ctx.save();
-      ctx.translate(6, 6); // Weapon position relative to torso
+      ctx.translate(6, 6); // Weapon position relative to operator center
 
       if (wId === 'pistol') {
         // Compact Tactical Handgun
         ctx.fillStyle = '#1e293b';
-        ctx.fillRect(-2, 0, 4, 18);
+        ctx.fillRect(0, -2, 18, 4);
         ctx.fillStyle = '#64748b'; // Slide
-        ctx.fillRect(-1.5, 6, 3, 12);
+        ctx.fillRect(6, -1.5, 12, 3);
       } else if (wId === 'smg') {
         // Compact Submachine Gun (Vector style)
         ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-3, -4, 6, 26);
+        ctx.fillRect(-4, -3, 26, 6);
         ctx.fillStyle = '#38bdf8'; // Cyan accent
-        ctx.fillRect(-2, 4, 4, 4);
+        ctx.fillRect(4, -2, 4, 4);
         // Curved Magazine
         ctx.fillStyle = '#1e293b';
-        ctx.fillRect(-4, 8, 4, 12);
+        ctx.fillRect(8, 2, 10, 4);
       } else if (wId === 'shotgun') {
         // Heavy Shotgun with Pump
         ctx.fillStyle = '#1e293b';
-        ctx.fillRect(-3, -2, 6, 28);
+        ctx.fillRect(-2, -3, 28, 6);
         // Dual barrel / tube
         ctx.fillStyle = '#475569';
-        ctx.fillRect(-2.5, 12, 5, 16);
+        ctx.fillRect(12, -2.5, 16, 5);
         // Orange pump grip
         ctx.fillStyle = '#ea580c';
-        ctx.fillRect(-3.5, 14, 7, 8);
+        ctx.fillRect(14, -3.5, 8, 7);
       } else if (wId === 'sniper') {
         // High-Precision AMR Rifle
         ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-3, -6, 6, 38);
+        ctx.fillRect(-6, -3, 38, 6);
         // Long heavy fluted barrel
         ctx.fillStyle = '#94a3b8';
-        ctx.fillRect(-1.5, 16, 3, 26);
+        ctx.fillRect(16, -1.5, 26, 3);
         // Muzzle brake
         ctx.fillStyle = '#334155';
-        ctx.fillRect(-3, 38, 6, 6);
+        ctx.fillRect(38, -3, 6, 6);
         // Scope mount
         ctx.fillStyle = '#c084fc';
-        ctx.fillRect(-2, 4, 4, 10);
+        ctx.fillRect(4, -2, 10, 4);
       } else {
         // M4A1 Assault Rifle
         ctx.fillStyle = '#0f172a';
-        ctx.fillRect(-2.5, -4, 5, 30);
+        ctx.fillRect(-4, -2.5, 30, 5);
         // Receiver & Handguard
         ctx.fillStyle = '#334155';
-        ctx.fillRect(-2, 4, 4, 16);
+        ctx.fillRect(4, -2, 16, 4);
         // Curved 30-round STANAG mag
         ctx.fillStyle = '#64748b';
-        ctx.fillRect(-4, 6, 3, 10);
+        ctx.fillRect(6, 2, 8, 3);
         // Barrel & Flash hider
         ctx.fillStyle = '#1e293b';
-        ctx.fillRect(-1.5, 20, 3, 12);
+        ctx.fillRect(20, -1.5, 12, 3);
       }
 
       // Laser Sight beam if equipped
@@ -601,8 +604,8 @@
         ctx.strokeStyle = 'rgba(216, 70, 239, 0.75)';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(0, 38);
-        ctx.lineTo(0, 400);
+        ctx.moveTo(38, 0);
+        ctx.lineTo(420, 0);
         ctx.stroke();
 
         // Target laser dot
@@ -610,7 +613,7 @@
         ctx.shadowColor = '#f43f5e';
         ctx.shadowBlur = 8;
         ctx.beginPath();
-        ctx.arc(0, 400, 3, 0, Math.PI * 2);
+        ctx.arc(420, 0, 3, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
@@ -619,9 +622,9 @@
       if (isShooting) {
         const flashCvs = this.cache.get('muzzle_flash');
         if (flashCvs) {
-          const barrelTipY = wId === 'sniper' ? 44 : (wId === 'shotgun' ? 30 : 28);
+          const barrelTipX = wId === 'sniper' ? 44 : (wId === 'shotgun' ? 30 : 28);
           ctx.save();
-          ctx.translate(0, barrelTipY);
+          ctx.translate(barrelTipX, 0);
           ctx.rotate(Math.random() * Math.PI);
           ctx.drawImage(flashCvs, -16, -16, 32, 32);
           ctx.restore();
@@ -635,7 +638,7 @@
       const visorColor = colorData.visor || '#38bdf8';
 
       // Ballistic Ops-Core Helmet
-      const helmetGrad = ctx.createRadialGradient(0, -2, 2, 0, 0, 12);
+      const helmetGrad = ctx.createRadialGradient(-2, 0, 2, 0, 0, 12);
       helmetGrad.addColorStop(0, '#334155');
       helmetGrad.addColorStop(0.8, '#1e293b');
       helmetGrad.addColorStop(1, '#0f172a');
@@ -649,8 +652,8 @@
 
       // Tactical Headset / Ear Protectors
       ctx.fillStyle = '#0f172a';
-      ctx.fillRect(-13, -4, 3, 8);
-      ctx.fillRect(10, -4, 3, 8);
+      ctx.fillRect(-4, -13, 8, 3);
+      ctx.fillRect(-4, 10, 8, 3);
 
       // Glowing Tactical Visor / NVG Goggles
       ctx.save();
@@ -658,7 +661,7 @@
       ctx.shadowColor = visorColor;
       ctx.shadowBlur = 6;
       ctx.beginPath();
-      ctx.roundRect(-6, 6, 12, 4, 2);
+      ctx.roundRect(6, -6, 4, 12, 2);
       ctx.fill();
       ctx.restore();
     }
@@ -673,13 +676,13 @@
       // Slumped soldier body
       ctx.fillStyle = '#1e293b';
       ctx.beginPath();
-      ctx.roundRect(-12, -10, 24, 20, 6);
+      ctx.roundRect(-10, -12, 20, 24, 6);
       ctx.fill();
 
       // Helmet knocked askew
       ctx.fillStyle = '#334155';
       ctx.beginPath();
-      ctx.arc(8, 6, 10, 0, Math.PI * 2);
+      ctx.arc(6, 8, 10, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -742,38 +745,34 @@
     }
 
     renderDecals(ctx, viewX, viewY, viewW, viewH) {
-      // 1. Render permanent blood splatters
+      // 1. Render permanent blood splatters (World coordinates)
       ctx.save();
       for (let i = 0; i < this.bloodDecals.length; i++) {
         const b = this.bloodDecals[i];
-        const sx = b.x - viewX;
-        const sy = b.y - viewY;
-        if (sx < -50 || sx > viewW + 50 || sy < -50 || sy > viewH + 50) continue;
+        if (b.x < viewX - 50 || b.x > viewX + viewW + 50 || b.y < viewY - 50 || b.y > viewY + viewH + 50) continue;
 
         ctx.fillStyle = `rgba(136, 19, 19, ${b.alpha})`;
         ctx.beginPath();
-        ctx.arc(sx, sy, b.mainRadius, 0, Math.PI * 2);
+        ctx.arc(b.x, b.y, b.mainRadius, 0, Math.PI * 2);
         ctx.fill();
 
         for (let j = 0; j < b.drops.length; j++) {
           const d = b.drops[j];
           ctx.beginPath();
-          ctx.arc(sx + d.dx, sy + d.dy, d.r, 0, Math.PI * 2);
+          ctx.arc(b.x + d.dx, b.y + d.dy, d.r, 0, Math.PI * 2);
           ctx.fill();
         }
       }
       ctx.restore();
 
-      // 2. Render spent brass shell casings
+      // 2. Render spent brass shell casings (World coordinates)
       ctx.save();
       for (let i = 0; i < this.shellCasings.length; i++) {
         const sc = this.shellCasings[i];
-        const sx = sc.x - viewX;
-        const sy = sc.y - viewY;
-        if (sx < -20 || sx > viewW + 20 || sy < -20 || sy > viewH + 20) continue;
+        if (sc.x < viewX - 20 || sc.x > viewX + viewW + 20 || sc.y < viewY - 20 || sc.y > viewY + viewH + 20) continue;
 
         ctx.save();
-        ctx.translate(sx, sy);
+        ctx.translate(sc.x, sc.y);
         ctx.rotate(sc.angle);
         ctx.fillStyle = sc.type === 'shotgun' ? '#dc2626' : '#eab308';
         ctx.fillRect(-1.5, -3, 3, 6);
@@ -790,7 +789,7 @@
        ========================================================================= */
 
     renderMap(ctx, map, viewX, viewY, viewW, viewH) {
-      // 1. Tiled floor background
+      // 1. Tiled floor background (World coordinates)
       const floorCvs = this.cache.get('floor_tile');
       if (floorCvs) {
         const tileSize = floorCvs.width;
@@ -800,65 +799,64 @@
         for (let x = startX; x < viewX + viewW + tileSize; x += tileSize) {
           for (let y = startY; y < viewY + viewH + tileSize; y += tileSize) {
             if (x >= 0 && x < map.width && y >= 0 && y < map.height) {
-              ctx.drawImage(floorCvs, x - viewX, y - viewY);
+              ctx.drawImage(floorCvs, x, y);
             }
           }
         }
       }
 
-      // 2. Render Obstacles
+      // 2. Render Obstacles (World coordinates)
       for (let i = 0; i < map.obstacles.length; i++) {
         const obs = map.obstacles[i];
-        const sx = obs.x - viewX;
-        const sy = obs.y - viewY;
-        if (sx + obs.w < 0 || sx > viewW || sy + obs.h < 0 || sy > viewH) continue;
+        if (obs.x + obs.w < viewX - 50 || obs.x > viewX + viewW + 50 ||
+            obs.y + obs.h < viewY - 50 || obs.y > viewY + viewH + 50) continue;
 
         if (obs.type === 'crate') {
           const crateCvs = this.cache.get('crate');
           if (crateCvs) {
-            ctx.drawImage(crateCvs, 0, 0, crateCvs.width, crateCvs.height, sx, sy, obs.w, obs.h);
+            ctx.drawImage(crateCvs, 0, 0, crateCvs.width, crateCvs.height, obs.x, obs.y, obs.w, obs.h);
           }
         } else if (obs.type === 'crate_stack') {
           const stackCvs = this.cache.get('crate_stack');
           if (stackCvs) {
-            ctx.drawImage(stackCvs, 0, 0, stackCvs.width, stackCvs.height, sx, sy, obs.w, obs.h);
+            ctx.drawImage(stackCvs, 0, 0, stackCvs.width, stackCvs.height, obs.x, obs.y, obs.w, obs.h);
           }
         } else if (obs.type === 'sandbag') {
           const sandbagCvs = this.cache.get('sandbag');
           if (sandbagCvs) {
-            ctx.drawImage(sandbagCvs, 0, 0, sandbagCvs.width, sandbagCvs.height, sx, sy, obs.w, obs.h);
+            ctx.drawImage(sandbagCvs, 0, 0, sandbagCvs.width, sandbagCvs.height, obs.x, obs.y, obs.w, obs.h);
           }
         } else if (obs.type === 'tech_console') {
           const consoleCvs = this.cache.get('tech_console');
           if (consoleCvs) {
-            ctx.drawImage(consoleCvs, 0, 0, consoleCvs.width, consoleCvs.height, sx, sy, obs.w, obs.h);
+            ctx.drawImage(consoleCvs, 0, 0, consoleCvs.width, consoleCvs.height, obs.x, obs.y, obs.w, obs.h);
           }
         } else {
           // Reinforced Wall (Boundary or Interior)
           ctx.save();
           // Wall drop shadow
           ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-          ctx.fillRect(sx + 5, sy + 5, obs.w, obs.h);
+          ctx.fillRect(obs.x + 5, obs.y + 5, obs.w, obs.h);
 
           // Wall fill
-          const wallGrad = ctx.createLinearGradient(sx, sy, sx + obs.w, sy + obs.h);
+          const wallGrad = ctx.createLinearGradient(obs.x, obs.y, obs.x + obs.w, obs.y + obs.h);
           wallGrad.addColorStop(0, '#1e293b');
           wallGrad.addColorStop(1, '#0f172a');
           ctx.fillStyle = wallGrad;
-          ctx.fillRect(sx, sy, obs.w, obs.h);
+          ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
 
           // Wall border / bevel
           ctx.strokeStyle = '#475569';
           ctx.lineWidth = 2;
-          ctx.strokeRect(sx + 1, sy + 1, obs.w - 2, obs.h - 2);
+          ctx.strokeRect(obs.x + 1, obs.y + 1, obs.w - 2, obs.h - 2);
 
           // Inner hazard or tech stripe if wall is large enough
           if (obs.w >= 80 && obs.h >= 24) {
             ctx.strokeStyle = '#334155';
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(sx + 10, sy + obs.h / 2);
-            ctx.lineTo(sx + obs.w - 10, sy + obs.h / 2);
+            ctx.moveTo(obs.x + 10, obs.y + obs.h / 2);
+            ctx.lineTo(obs.x + obs.w - 10, obs.y + obs.h / 2);
             ctx.stroke();
           }
 
@@ -866,40 +864,37 @@
         }
       }
 
-      // 3. Render Barrels
+      // 3. Render Barrels (World coordinates)
       for (let i = 0; i < map.barrels.length; i++) {
         const b = map.barrels[i];
-        const sx = b.x - viewX;
-        const sy = b.y - viewY;
-        if (sx + 30 < 0 || sx - 30 > viewW || sy + 30 < 0 || sy - 30 > viewH) continue;
+        if (b.x + 30 < viewX || b.x - 30 > viewX + viewW ||
+            b.y + 30 < viewY || b.y - 30 > viewY + viewH) continue;
 
         const barrelKey = b.exploded ? 'barrel_exploded' : 'barrel';
         const barrelCvs = this.cache.get(barrelKey);
         if (barrelCvs) {
-          ctx.drawImage(barrelCvs, sx - barrelCvs.width / 2, sy - barrelCvs.height / 2);
+          ctx.drawImage(barrelCvs, b.x - barrelCvs.width / 2, b.y - barrelCvs.height / 2);
         }
       }
 
-      // 4. Render Item Pickups
+      // 4. Render Item Pickups (World coordinates)
       for (let i = 0; i < map.itemSpawns.length; i++) {
         const item = map.itemSpawns[i];
         if (!item.active) continue;
+        if (item.x + 30 < viewX || item.x - 30 > viewX + viewW ||
+            item.y + 30 < viewY || item.y - 30 > viewY + viewH) continue;
 
-        const sx = item.x - viewX;
-        const sy = item.y - viewY;
-        if (sx + 30 < 0 || sx - 30 > viewW || sy + 30 < 0 || sy - 30 > viewH) continue;
-
-        this.renderItemPickup(ctx, sx, sy, item);
+        this.renderItemPickup(ctx, item.x, item.y, item);
       }
     }
 
-    renderItemPickup(ctx, sx, sy, item) {
+    renderItemPickup(ctx, x, y, item) {
       const now = performance.now();
       const floatY = Math.sin(now * 0.004) * 3;
       const pulse = 1 + Math.sin(now * 0.006) * 0.15;
 
       ctx.save();
-      ctx.translate(sx, sy + floatY);
+      ctx.translate(x, y + floatY);
 
       // Glowing Aura
       const color = item.type === 'medkit' ? '#22c55e' :
@@ -941,3 +936,4 @@
 
   return SpriteRenderer;
 }));
+

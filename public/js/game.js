@@ -66,6 +66,7 @@
       window.addEventListener('resize', () => this.resizeCanvas());
 
       window.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
         this.input.keys[e.code] = true;
         if (e.code === 'KeyF') this.input.toggleFlashlight = true;
         if (e.code === 'Tab') {
@@ -76,6 +77,7 @@
       });
 
       window.addEventListener('keyup', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
         this.input.keys[e.code] = false;
         if (e.code === 'Tab') {
           e.preventDefault();
@@ -91,6 +93,7 @@
       });
 
       window.addEventListener('mousedown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
         if (e.button === 0) this.input.mouseDown = true;
         if (e.button === 2) this.input.rightDown = true;
         if (this.sounds) this.sounds.resume();
@@ -131,6 +134,88 @@
       this.player = playerInstance;
       const sp = this.map.getRandomSpawnPoint();
       this.player.respawn(sp);
+
+      // Setup network event handlers
+      this.network.onShootEvent = (remoteBullets) => {
+        if (!remoteBullets || remoteBullets.length === 0) return;
+        this.bullets.push(...remoteBullets);
+
+        const firstB = remoteBullets[0];
+        const shooter = this.network.remotePlayers.get(firstB.shooterId);
+        if (shooter) {
+          const dist = Math.hypot(shooter.x - this.player.x, shooter.y - this.player.y);
+          if (dist < 1200) {
+            const wpn = this.config.WEAPONS[shooter.weapon] || this.config.WEAPONS['RIFLE'];
+            this.sounds.playGunshot(wpn.sound);
+          }
+          this.sprites.addShellCasing(shooter.x, shooter.y, shooter.angle, shooter.weapon);
+          shooter.isShooting = true;
+          setTimeout(() => { shooter.isShooting = false; }, 80);
+        }
+      };
+
+      this.network.onDamageTakenEvent = (msg) => {
+        if (!this.player) return;
+        this.player.hp = msg.hp;
+        this.player.shield = msg.shield;
+        this.particles.addBloodBurst(this.player.x, this.player.y, Math.random() * Math.PI * 2);
+        this.sprites.addBloodDecal(this.player.x, this.player.y);
+        this.particles.addDamageNumber(this.player.x, this.player.y, msg.damage, msg.damage > 70);
+        this.particles.addScreenShake(8);
+        this.sounds.playHitmarker();
+
+        if (msg.isDead) {
+          this.player.isDead = true;
+          this.player.respawnTimer = this.config.PLAYER.RESPAWN_DELAY_MS;
+        }
+      };
+
+      this.network.onItemPickedEvent = (msg) => {
+        const item = this.map.itemSpawns.find(it => it.id === msg.itemId);
+        if (item) {
+          item.active = false;
+          if (msg.playerId === this.player.id) {
+            if (msg.itemType === 'medkit') this.player.heal(50);
+            else if (msg.itemType === 'shield') this.player.addShield(50);
+            else if (msg.itemType === 'ammo') this.player.weaponManager.addAmmo(0.6);
+            else if (msg.itemType === 'weapon' && msg.weapon) this.player.weaponManager.unlockWeapon(msg.weapon);
+            if (this.sounds) this.sounds.playPickup();
+          }
+        }
+      };
+
+      this.network.onBarrelExplodedEvent = (msg) => {
+        const barrel = this.map.barrels.find(b => b.id === msg.barrelId);
+        if (barrel) {
+          barrel.exploded = true;
+          this.particles.addExplosion(msg.x, msg.y, 140);
+          this.sounds.playExplosion();
+          this.map.rebuildSegments();
+        }
+      };
+
+      this.network.onRespawnedEvent = (msg) => {
+        if (!this.player) return;
+        this.player.x = msg.spawn.x;
+        this.player.y = msg.spawn.y;
+        this.player.angle = msg.spawn.angle;
+        this.player.hp = msg.hp;
+        this.player.shield = msg.shield;
+        this.player.isDead = false;
+        this.player.respawnTimer = 0;
+      };
+
+      this.network.onLocalStatsSync = (stats) => {
+        if (!this.player) return;
+        this.player.kills = stats.kills;
+        this.player.deaths = stats.deaths;
+        this.player.score = stats.score;
+        if (stats.isDead && !this.player.isDead) {
+          this.player.isDead = true;
+          this.player.hp = 0;
+          this.player.respawnTimer = this.config.PLAYER.RESPAWN_DELAY_MS;
+        }
+      };
 
       // Initialize raycaster exploration canvas
       this.raycaster.initExploration(this.map.width, this.map.height);
@@ -174,7 +259,7 @@
       this.updateWorldMouse();
 
       // 1. Update Player
-      this.player.update(this.input, this.map, this.sounds, now, dt);
+      this.player.update(this.input, this.map, this.sounds, now, dt, this.network);
 
       // Handle Shooting
       if (this.input.mouseDown && !this.player.isDead) {
@@ -296,6 +381,9 @@
           if (d < barrel.r + 4) {
             barrel.hp -= b.damage;
             this.particles.addWallSparks(b.x, b.y);
+            if (!this.network.isOfflineMode) {
+              this.network.sendBarrelHit(barrel.id, b.damage, b.shooterId);
+            }
             if (barrel.hp <= 0) {
               barrel.exploded = true;
               this.particles.addExplosion(barrel.x, barrel.y, 140);
