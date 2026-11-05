@@ -39,21 +39,38 @@
      */
     computeVisibilityPolygon(ox, oy, facingAngle, fovRad, range, peripheralRadius, segments) {
       const halfFov = fovRad / 2;
-      const minAngle = facingAngle - halfFov;
-      const maxAngle = facingAngle + halfFov;
+      const taper = 0.25;
 
-      const angles = [];
-
-      // 1. Arc boundary angles
-      const coneStep = Math.PI / 32;
-      for (let a = minAngle; a <= maxAngle + 0.001; a += coneStep) {
-        angles.push(a);
+      // Distance helper for any given angle
+      function getMaxDist(ang) {
+        let diff = Math.abs(ang - facingAngle);
+        while (diff > Math.PI) diff = Math.abs(diff - 2 * Math.PI);
+        if (diff <= halfFov) {
+          return range;
+        } else if (diff <= halfFov + taper) {
+          const t = 1 - (diff - halfFov) / taper;
+          return peripheralRadius + (range - peripheralRadius) * t;
+        }
+        return peripheralRadius;
       }
 
-      // 2. Peripheral 360 degree angles (sample around circle for close-proximity vision)
-      const circleStep = Math.PI / 16;
-      for (let a = -Math.PI; a <= Math.PI; a += circleStep) {
-        angles.push(a);
+      const rawAngles = [];
+
+      // 1. Uniform circular rays covering full 360 degrees (180 samples = 2 deg precision)
+      const CIRCLE_SAMPLES = 180;
+      for (let i = 0; i <= CIRCLE_SAMPLES; i++) {
+        rawAngles.push(-Math.PI + (i / CIRCLE_SAMPLES) * 2 * Math.PI);
+      }
+
+      // 2. Cone boundary critical transition angles
+      const keyAngles = [
+        facingAngle - halfFov,
+        facingAngle + halfFov,
+        facingAngle - halfFov - taper,
+        facingAngle + halfFov + taper
+      ];
+      for (let i = 0; i < keyAngles.length; i++) {
+        rawAngles.push(keyAngles[i]);
       }
 
       // 3. Segment endpoints that fall within sight range
@@ -66,7 +83,7 @@
         const dyA = seg.a.y - oy;
         if (dxA * dxA + dyA * dyA <= rangeSq) {
           const angA = Math.atan2(dyA, dxA);
-          angles.push(angA - 0.0002, angA, angA + 0.0002);
+          rawAngles.push(angA - 0.0001, angA, angA + 0.0001);
         }
 
         // Check point B
@@ -74,32 +91,25 @@
         const dyB = seg.b.y - oy;
         if (dxB * dxB + dyB * dyB <= rangeSq) {
           const angB = Math.atan2(dyB, dxB);
-          angles.push(angB - 0.0002, angB, angB + 0.0002);
+          rawAngles.push(angB - 0.0001, angB, angB + 0.0001);
         }
       }
 
+      // Normalize all angles to [-PI, PI]
+      const angles = [];
+      for (let i = 0; i < rawAngles.length; i++) {
+        const a = Math.atan2(Math.sin(rawAngles[i]), Math.cos(rawAngles[i]));
+        angles.push(a);
+      }
+
+      // Explicitly ensure both -PI and +PI boundaries exist for seamless West closure
+      angles.push(-Math.PI, Math.PI);
+
       // Cast rays for all gathered angles
       const hits = [];
-
       for (let i = 0; i < angles.length; i++) {
-        const rawAngle = angles[i];
-        // Normalize angle to [-PI, PI]
-        const ang = Math.atan2(Math.sin(rawAngle), Math.cos(rawAngle));
-
-        // Determine max allowed distance for this angle
-        let diff = Math.abs(ang - facingAngle);
-        while (diff > Math.PI) diff = Math.abs(diff - 2 * Math.PI);
-
-        let maxDist = peripheralRadius;
-        if (diff <= halfFov) {
-          // Inside FOV cone, full vision range
-          maxDist = range;
-        } else if (diff <= halfFov + 0.25) {
-          // Smooth taper at the edge of vision cone
-          const t = 1 - (diff - halfFov) / 0.25;
-          maxDist = peripheralRadius + (range - peripheralRadius) * t;
-        }
-
+        const ang = angles[i];
+        const maxDist = getMaxDist(ang);
         const rdx = Math.cos(ang);
         const rdy = Math.sin(ang);
         const rayEnd = { x: ox + rdx * maxDist, y: oy + rdy * maxDist };
@@ -129,10 +139,10 @@
       // Sort hits by angle around (ox, oy)
       hits.sort((p1, p2) => p1.angle - p2.angle);
 
-      // Remove near-duplicate angles to optimize geometry
+      // Remove near-duplicate consecutive angles
       const filteredHits = [];
       for (let i = 0; i < hits.length; i++) {
-        if (i === 0 || Math.abs(hits[i].angle - hits[i - 1].angle) > 0.00001) {
+        if (i === 0 || Math.abs(hits[i].angle - hits[i - 1].angle) > 0.00002) {
           filteredHits.push(hits[i]);
         }
       }
@@ -208,16 +218,16 @@
      */
     updateExploration(poly, now) {
       if (!this.explorationCtx || poly.length < 3) return;
-      if (now - this.lastExplorationUpdate < 60) return; // Cap exploration stamp rate to ~16 fps
+      if (now - this.lastExplorationUpdate < 30) return; // Responsive ~33 fps stamp rate
       this.lastExplorationUpdate = now;
 
       const ctx = this.explorationCtx;
       const s = this.scale;
 
       ctx.save();
-      // Cut out explored area using destination-out
+      // Cut out explored area using destination-out with 100% clearing inside direct LOS
       ctx.globalCompositeOperation = 'destination-out';
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; // Stamping creates smooth graduated reveal
+      ctx.fillStyle = 'rgba(0, 0, 0, 1.0)';
 
       ctx.beginPath();
       ctx.moveTo(poly[0].x * s, poly[0].y * s);
@@ -241,7 +251,7 @@
       // 1. Draw exploration shroud (fog of war memory) across world
       if (this.explorationCanvas) {
         ctx.save();
-        ctx.globalAlpha = 0.88; // Explored areas appear dimmed under shroud
+        ctx.globalAlpha = 0.90; // Unexplored territory is impenetrable black
         ctx.drawImage(
           this.explorationCanvas,
           0, 0, this.explorationCanvas.width, this.explorationCanvas.height,
@@ -282,8 +292,8 @@
 
       ctx.fillStyle = coneGrad;
       ctx.beginPath();
-      ctx.moveTo(player.x, player.y);
-      for (let i = 0; i < poly.length; i++) {
+      ctx.moveTo(poly[0].x, poly[0].y);
+      for (let i = 1; i < poly.length; i++) {
         ctx.lineTo(poly[i].x, poly[i].y);
       }
       ctx.closePath();

@@ -40,6 +40,12 @@ class Room {
     this.tickInterval = null;
     this.lastTickTime = Date.now();
 
+    // Match Round Timer & State
+    this.roundDurationSec = 180;
+    this.roundTimeRemaining = this.roundDurationSec;
+    this.isRoundOver = false;
+    this.postRoundTimer = 0;
+
     this.startLoop();
   }
 
@@ -164,6 +170,38 @@ class Room {
     const dt = (now - this.lastTickTime) / 1000;
     this.lastTickTime = now;
 
+    // 0. Update Round Timer
+    if (!this.isRoundOver) {
+      this.roundTimeRemaining = Math.max(0, this.roundTimeRemaining - dt);
+      if (this.roundTimeRemaining <= 0) {
+        this.isRoundOver = true;
+        this.postRoundTimer = 10;
+        const all = [...this.players.values(), ...this.bots];
+        all.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.kills || 0) - (a.kills || 0));
+        const mvp = all[0] || null;
+        this.broadcast({
+          type: 'round_end',
+          mvp: mvp ? { id: mvp.id, name: mvp.name, kills: mvp.kills, deaths: mvp.deaths, score: mvp.score } : null,
+          leaderboard: all.map(p => ({ id: p.id, name: p.name, kills: p.kills, deaths: p.deaths, score: p.score })),
+          duration: 10
+        });
+      }
+    } else {
+      this.postRoundTimer -= dt;
+      if (this.postRoundTimer <= 0) {
+        this.isRoundOver = false;
+        this.roundTimeRemaining = this.roundDurationSec;
+        for (const p of this.players.values()) {
+          const sp = this.map.getRandomSpawnPoint();
+          p.x = sp.x; p.y = sp.y; p.hp = GameConfig.PLAYER.MAX_HP; p.shield = GameConfig.PLAYER.MAX_SHIELD; p.isDead = false;
+        }
+        for (const b of this.bots) {
+          b.respawn(this.map.getRandomSpawnPoint());
+        }
+        this.broadcast({ type: 'round_start', timeRemaining: this.roundDurationSec });
+      }
+    }
+
     // 1. Update bots
     const allEnts = [...this.players.values(), ...this.bots];
     for (const bot of this.bots) {
@@ -226,7 +264,9 @@ class Room {
       type: 'state',
       players: playerSnapshots,
       items: itemsState,
-      barrels: barrelsState
+      barrels: barrelsState,
+      roundTime: Math.ceil(this.roundTimeRemaining),
+      isRoundOver: this.isRoundOver
     });
   }
 }

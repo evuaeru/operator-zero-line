@@ -58,6 +58,7 @@
     <!-- In-Game Top Bar -->
     <div class="top-bar">
       <div id="hud-room-code" class="hud-badge">ROOM: SQUAD1</div>
+      <div id="hud-timer" class="hud-badge timer-badge">⏱️ 03:00</div>
       <button id="btn-copy-invite" class="btn-pill" title="Copy room link for friends">📋 COPY INVITE LINK</button>
       <button id="btn-toggle-bots" class="btn-pill" title="Add or remove AI bots">🤖 TOGGLE BOTS</button>
       <div id="hud-ping" class="hud-badge" style="color: #4ade80;">PING: --</div>
@@ -69,6 +70,67 @@
         <div class="chat-message"><span class="chat-sender">HQ:</span> Tactical link established. Press [Enter] to chat.</div>
       </div>
       <input type="text" id="chat-input" placeholder="Press Enter to send squad message..." maxlength="100">
+    </div>
+  </div>
+
+  <!-- MATCH END / MVP CELEBRATION MODAL -->
+  <div id="match-end-modal" class="screen modal-overlay hidden">
+    <div class="match-end-card">
+      <div class="match-end-header">
+        <div class="operation-status">★ OPERATION COMPLETE ★</div>
+        <h2>MATCH OUTCOME & MVP</h2>
+      </div>
+
+      <!-- MVP SPOTLIGHT CARD -->
+      <div id="mvp-spotlight-card" class="mvp-spotlight">
+        <div class="mvp-crown-badge">👑 MOST VALUABLE OPERATOR</div>
+        <div class="mvp-name" id="mvp-player-name">Ghost_1</div>
+        <div class="mvp-title" id="mvp-player-title">APEX PREDATOR</div>
+
+        <div class="mvp-stats-grid">
+          <div class="mvp-stat-box">
+            <span class="mvp-stat-val" id="mvp-stat-kills">0</span>
+            <span class="mvp-stat-lbl">KILLS</span>
+          </div>
+          <div class="mvp-stat-box">
+            <span class="mvp-stat-val" id="mvp-stat-deaths">0</span>
+            <span class="mvp-stat-lbl">DEATHS</span>
+          </div>
+          <div class="mvp-stat-box">
+            <span class="mvp-stat-val" id="mvp-stat-kd">0.0</span>
+            <span class="mvp-stat-lbl">K/D RATIO</span>
+          </div>
+          <div class="mvp-stat-box">
+            <span class="mvp-stat-val" id="mvp-stat-score">0</span>
+            <span class="mvp-stat-lbl">TOTAL SCORE</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- LEADERBOARD TABLE -->
+      <div class="match-leaderboard-container">
+        <table class="match-leaderboard-table">
+          <thead>
+            <tr>
+              <th>RANK</th>
+              <th>OPERATOR</th>
+              <th>KILLS</th>
+              <th>DEATHS</th>
+              <th>K/D</th>
+              <th>SCORE</th>
+            </tr>
+          </thead>
+          <tbody id="match-leaderboard-body">
+            <!-- Dynamic rows inserted here -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- FOOTER ACTIONS -->
+      <div class="match-end-footer">
+        <div id="next-round-countdown" class="countdown-text">NEXT ROUND IN 10s...</div>
+        <button id="btn-next-round" class="btn btn-primary">DEPLOY NEXT ROUND</button>
+      </div>
     </div>
   </div>
 

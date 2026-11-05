@@ -46,6 +46,7 @@
       this.stateTimer = 0;
       this.strafeDir = 1;
       this.shootCooldown = 0;
+      this.reactionTimer = 0;
 
       // Walk animation
       this.walkCycle = 0;
@@ -163,6 +164,10 @@
       if (this.hp < 30 && this.state !== 'retreat') {
         this.state = 'retreat';
       } else if (closestEnemy) {
+        if (this.state !== 'combat') {
+          // Human-like reaction delay when spotting enemy (400-500ms)
+          this.reactionTimer = 450;
+        }
         this.state = 'combat';
         this.target = closestEnemy;
       } else if (this.state === 'combat' && !closestEnemy) {
@@ -171,10 +176,15 @@
       }
 
       // 3. State Behavior
+      const timeScale = Math.min(Math.max(dt * 60, 0.1), 3.0);
       let targetX = this.x;
       let targetY = this.y;
       let moveSpeed = this.config.PLAYER.SPEED * 0.85;
       let bulletsCreated = null;
+
+      if (this.reactionTimer > 0) {
+        this.reactionTimer -= dt * 1000;
+      }
 
       if (this.state === 'combat' && this.target) {
         const dx = this.target.x - this.x;
@@ -199,18 +209,18 @@
           fwdY = -Math.sin(this.angle);
         }
 
-        targetX = this.x + (perpX * 0.7 + fwdX) * moveSpeed;
-        targetY = this.y + (perpY * 0.7 + fwdY) * moveSpeed;
+        targetX = this.x + (perpX * 0.7 + fwdX) * moveSpeed * timeScale;
+        targetY = this.y + (perpY * 0.7 + fwdY) * moveSpeed * timeScale;
 
         // Change strafe direction occasionally
         if (Math.random() < 0.02) this.strafeDir *= -1;
 
-        // Fire weapon in tactical bursts
-        if (this.weaponManager.canShoot(now)) {
+        // Fire weapon in tactical bursts (only after reaction delay)
+        if (this.reactionTimer <= 0 && this.weaponManager.canShoot(now)) {
           // Check line of sight before firing
           if (!map.isLineBlocked(this.x, this.y, this.target.x, this.target.y)) {
-            // Small bot aim inaccuracy
-            const aimSpread = (Math.random() - 0.5) * 0.08;
+            // Realistic bot aim inaccuracy
+            const aimSpread = (Math.random() - 0.5) * 0.14;
             bulletsCreated = this.weaponManager.shoot(this.id, this.x, this.y, this.angle + aimSpread, now);
             this.isShooting = true;
           }
@@ -225,8 +235,8 @@
         this.targetAngle = Math.atan2(dy, dx);
         this.smoothTurn(dt);
 
-        targetX = this.x + Math.cos(this.angle) * moveSpeed * 1.1;
-        targetY = this.y + Math.sin(this.angle) * moveSpeed * 1.1;
+        targetX = this.x + Math.cos(this.angle) * moveSpeed * 1.0 * timeScale;
+        targetY = this.y + Math.sin(this.angle) * moveSpeed * 1.0 * timeScale;
 
         if (Math.hypot(dx, dy) < 40) {
           this.waypoint = null;
@@ -243,8 +253,8 @@
         this.targetAngle = Math.atan2(dy, dx);
         this.smoothTurn(dt);
 
-        targetX = this.x + Math.cos(this.angle) * moveSpeed * 0.7;
-        targetY = this.y + Math.sin(this.angle) * moveSpeed * 0.7;
+        targetX = this.x + Math.cos(this.angle) * moveSpeed * 0.6 * timeScale;
+        targetY = this.y + Math.sin(this.angle) * moveSpeed * 0.6 * timeScale;
       }
 
       // 4. Collision and Position Resolution
@@ -253,7 +263,7 @@
 
       if (movedDist > 0.5) {
         this.isWalking = true;
-        this.walkCycle += 0.2;
+        this.walkCycle += 0.18 * timeScale;
       } else {
         this.isWalking = false;
         // If stuck on obstacle during patrol, pick new waypoint

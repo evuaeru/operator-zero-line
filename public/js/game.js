@@ -51,6 +51,12 @@
       this.lastTime = performance.now();
       this.running = false;
 
+      // Match Round Timer & State
+      this.roundDurationSec = 180; // 3 minutes per round
+      this.roundTimeRemaining = this.roundDurationSec;
+      this.isMatchOver = false;
+      this.nextRoundInterval = null;
+
       this.initEvents();
       this.resizeCanvas();
     }
@@ -205,6 +211,14 @@
         this.player.respawnTimer = 0;
       };
 
+      this.network.onRoundEndEvent = (msg) => {
+        this.triggerMatchEnd(msg.mvp, msg.leaderboard);
+      };
+
+      this.network.onRoundStartEvent = (msg) => {
+        this.resetMatchForNextRound();
+      };
+
       this.network.onLocalStatsSync = (stats) => {
         if (!this.player) return;
         this.player.kills = stats.kills;
@@ -223,6 +237,12 @@
       // If offline mode or single player, spawn 3 tactical bots
       if (this.network.isOfflineMode) {
         this.spawnOfflineBots(3);
+      }
+
+      // Update HUD Room Code
+      const roomEl = document.getElementById('hud-room-code');
+      if (roomEl) {
+        roomEl.textContent = this.network.isOfflineMode ? 'ROOM: TRAINING' : `ROOM: ${this.network.roomId || 'SQUAD1'}`;
       }
 
       this.running = true;
@@ -258,11 +278,38 @@
 
       this.updateWorldMouse();
 
+      // 0. Update Match Round Timer
+      if (!this.isMatchOver) {
+        if (this.network.isOfflineMode) {
+          this.roundTimeRemaining = Math.max(0, this.roundTimeRemaining - dt);
+        } else if (this.network.serverRoundTime !== null && this.network.serverRoundTime !== undefined) {
+          this.roundTimeRemaining = this.network.serverRoundTime;
+        } else {
+          this.roundTimeRemaining = Math.max(0, this.roundTimeRemaining - dt);
+        }
+
+        const min = Math.floor(this.roundTimeRemaining / 60);
+        const sec = Math.floor(this.roundTimeRemaining % 60);
+        const timerEl = document.getElementById('hud-timer');
+        if (timerEl) {
+          timerEl.textContent = `⏱️ ${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+          if (this.roundTimeRemaining < 30) {
+            timerEl.classList.add('warning');
+          } else {
+            timerEl.classList.remove('warning');
+          }
+        }
+
+        if (this.roundTimeRemaining <= 0) {
+          this.triggerMatchEnd();
+        }
+      }
+
       // 1. Update Player
       this.player.update(this.input, this.map, this.sounds, now, dt, this.network);
 
-      // Handle Shooting
-      if (this.input.mouseDown && !this.player.isDead) {
+      // Handle Shooting (Disabled during Match Over)
+      if (this.input.mouseDown && !this.player.isDead && !this.isMatchOver) {
         const newBullets = this.player.weaponManager.shoot(
           this.player.id,
           this.player.x,
@@ -341,15 +388,16 @@
     }
 
     updateBullets(dt) {
+      const timeScale = Math.min(Math.max(dt * 60, 0.1), 3.0);
       for (let i = this.bullets.length - 1; i >= 0; i--) {
         const b = this.bullets[i];
         b.prevX = b.x;
         b.prevY = b.y;
 
-        b.x += b.vx;
-        b.y += b.vy;
+        b.x += b.vx * timeScale;
+        b.y += b.vy * timeScale;
 
-        const distTravelled = Math.hypot(b.vx, b.vy);
+        const distTravelled = Math.hypot(b.vx, b.vy) * timeScale;
         b.rangeRemaining -= distTravelled;
 
         if (b.rangeRemaining <= 0) {
@@ -441,8 +489,12 @@
                 this.network.killFeed.unshift({
                   killerName: this.player.name,
                   victimName: bot.name,
-                  weapon: b.weaponType
+                  weapon: b.weaponType,
+                  time: performance.now()
                 });
+                if (this.network.killFeed.length > 5) {
+                  this.network.killFeed.pop();
+                }
               }
 
               hitEnemy = true;
@@ -856,66 +908,259 @@
 
     renderKillFeed(ctx) {
       const feed = this.network.killFeed;
+      const now = performance.now();
       ctx.save();
       ctx.font = 'bold 12px monospace';
       ctx.textAlign = 'left';
 
-      for (let i = 0; i < feed.length; i++) {
-        const k = feed[i];
-        const y = 30 + i * 22;
+      // Purge entries older than 6 seconds
+      for (let i = feed.length - 1; i >= 0; i--) {
+        if (feed[i].time && (now - feed[i].time > 6000)) {
+          feed.splice(i, 1);
+        }
+      }
 
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.65)';
-        ctx.fillRect(20, y - 14, 260, 20);
+      const displayCount = Math.min(feed.length, 5);
+      for (let i = 0; i < displayCount; i++) {
+        const k = feed[i];
+        const age = k.time ? now - k.time : 0;
+        let alpha = 1.0;
+        if (age > 4500) {
+          alpha = Math.max(0, 1 - (age - 4500) / 1500);
+        }
+
+        ctx.globalAlpha = alpha;
+        const y = 30 + i * 26;
+
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.fillRect(20, y - 16, 300, 24);
+
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(20, y - 16, 300, 24);
 
         ctx.fillStyle = '#38bdf8';
-        ctx.fillText(k.killerName, 26, y);
+        ctx.fillText(k.killerName, 28, y);
 
         ctx.fillStyle = '#ef4444';
-        ctx.fillText(` [${(k.weapon || 'RIFLE').toUpperCase()}] `, 120, y);
+        ctx.fillText(` [${(k.weapon || 'RIFLE').toUpperCase()}] `, 135, y);
 
         ctx.fillStyle = '#f87171';
-        ctx.fillText(k.victimName, 200, y);
+        ctx.fillText(k.victimName, 225, y);
       }
       ctx.restore();
     }
 
     renderScoreboard(ctx, w, h) {
       ctx.save();
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-      ctx.fillRect(w / 2 - 260, h / 2 - 180, 520, 360);
+      const sbW = 640;
+      const sbH = 410;
+      const rx = w / 2 - sbW / 2;
+      const ry = h / 2 - sbH / 2;
+
+      // Dark cyber glass panel
+      ctx.fillStyle = 'rgba(10, 15, 29, 0.95)';
+      ctx.fillRect(rx, ry, sbW, sbH);
+
+      // Glowing Cyan border
       ctx.strokeStyle = '#38bdf8';
       ctx.lineWidth = 2;
-      ctx.strokeRect(w / 2 - 260, h / 2 - 180, 520, 360);
+      ctx.strokeRect(rx, ry, sbW, sbH);
 
+      // Inner tactical corner frame
+      ctx.strokeStyle = 'rgba(2, 132, 199, 0.5)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rx + 6, ry + 6, sbW - 12, sbH - 12);
+
+      // Title & Room Code Header
       ctx.font = 'bold 20px monospace';
       ctx.fillStyle = '#38bdf8';
       ctx.textAlign = 'center';
-      ctx.fillText(`TACTICAL SCOREBOARD - ROOM: ${this.network.roomId}`, w / 2, h / 2 - 140);
+      const roomLabel = (this.network.roomId && this.network.roomId !== 'null') ? this.network.roomId : 'OFFLINE TRAINING';
+      ctx.fillText(`TACTICAL SCOREBOARD • ${roomLabel}`, w / 2, ry + 36);
 
-      // Header row
+      // Round Timer in Scoreboard
+      const min = Math.floor(this.roundTimeRemaining / 60);
+      const sec = Math.floor(this.roundTimeRemaining % 60);
+      const timeStr = `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
       ctx.font = 'bold 13px monospace';
+      ctx.fillStyle = this.roundTimeRemaining < 30 ? '#ef4444' : '#fbbf24';
+      ctx.fillText(`ROUND TIME REMAINING: ${timeStr}`, w / 2, ry + 60);
+
+      // Table Header row
+      ctx.fillStyle = 'rgba(30, 41, 59, 0.85)';
+      ctx.fillRect(rx + 16, ry + 78, sbW - 32, 28);
+      ctx.font = 'bold 12px monospace';
       ctx.fillStyle = '#94a3b8';
       ctx.textAlign = 'left';
-      ctx.fillText('OPERATOR', w / 2 - 220, h / 2 - 100);
-      ctx.fillText('KILLS', w / 2 + 30, h / 2 - 100);
-      ctx.fillText('DEATHS', w / 2 + 100, h / 2 - 100);
-      ctx.fillText('SCORE', w / 2 + 170, h / 2 - 100);
+      ctx.fillText('RANK', rx + 28, ry + 96);
+      ctx.fillText('OPERATOR', rx + 95, ry + 96);
+      ctx.fillText('KILLS', rx + 300, ry + 96);
+      ctx.fillText('DEATHS', rx + 380, ry + 96);
+      ctx.fillText('K/D', rx + 460, ry + 96);
+      ctx.fillText('SCORE', rx + 535, ry + 96);
 
-      // Players
+      // Players sorted by score, then kills
       const list = [this.player, ...this.localBots, ...Array.from(this.network.remotePlayers.values())];
-      list.sort((a, b) => (b.score || 0) - (a.score || 0));
+      list.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.kills || 0) - (a.kills || 0));
 
-      for (let i = 0; i < list.length; i++) {
+      for (let i = 0; i < Math.min(list.length, 7); i++) {
         const p = list[i];
-        const rowY = h / 2 - 70 + i * 28;
-        ctx.fillStyle = p.id === this.player.id ? '#38bdf8' : '#f8fafc';
-        ctx.fillText(`${i + 1}. ${p.name}`, w / 2 - 220, rowY);
-        ctx.fillText(`${p.kills || 0}`, w / 2 + 40, rowY);
-        ctx.fillText(`${p.deaths || 0}`, w / 2 + 110, rowY);
-        ctx.fillText(`${p.score || 0}`, w / 2 + 180, rowY);
+        const rowY = ry + 130 + i * 34;
+        const isMe = p.id === this.player.id;
+
+        // Row background
+        if (isMe) {
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.18)';
+          ctx.fillRect(rx + 16, rowY - 20, sbW - 32, 30);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(rx + 16, rowY - 20, sbW - 32, 30);
+        } else if (i % 2 === 0) {
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.5)';
+          ctx.fillRect(rx + 16, rowY - 20, sbW - 32, 30);
+        }
+
+        // Rank styling (1st Gold, 2nd Silver, 3rd Bronze)
+        let rankColor = '#94a3b8';
+        let rankLabel = `#${i + 1}`;
+        if (i === 0) { rankColor = '#fbbf24'; rankLabel = '👑 1st'; }
+        else if (i === 1) { rankColor = '#e2e8f0'; rankLabel = '🥈 2nd'; }
+        else if (i === 2) { rankColor = '#fb923c'; rankLabel = '🥉 3rd'; }
+
+        ctx.font = 'bold 12px monospace';
+        ctx.fillStyle = rankColor;
+        ctx.textAlign = 'left';
+        ctx.fillText(rankLabel, rx + 28, rowY);
+
+        ctx.fillStyle = isMe ? '#38bdf8' : (p.colorData ? p.colorData.hex : '#f8fafc');
+        ctx.fillText((p.name || 'Unknown') + (isMe ? ' (YOU)' : ''), rx + 95, rowY);
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillText(`${p.kills || 0}`, rx + 310, rowY);
+        ctx.fillText(`${p.deaths || 0}`, rx + 390, rowY);
+
+        const kd = (p.deaths || 0) > 0 ? (p.kills / p.deaths).toFixed(1) : (p.kills || 0).toFixed(1);
+        ctx.fillText(`${kd}`, rx + 465, rowY);
+
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillText(`${p.score || 0}`, rx + 540, rowY);
       }
 
+      // Footer
+      ctx.font = 'italic 11px monospace';
+      ctx.fillStyle = '#64748b';
+      ctx.textAlign = 'center';
+      ctx.fillText('[TAB] Close Scoreboard • [Enter] Squad Chat', w / 2, ry + sbH - 16);
+
       ctx.restore();
+    }
+
+    triggerMatchEnd(serverMvp = null, serverLeaderboard = null) {
+      if (this.isMatchOver) return;
+      this.isMatchOver = true;
+
+      // Determine leaderboard
+      let list = [];
+      if (serverLeaderboard && serverLeaderboard.length > 0) {
+        list = serverLeaderboard;
+      } else {
+        list = [this.player, ...this.localBots, ...Array.from(this.network.remotePlayers.values())];
+        list.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.kills || 0) - (a.kills || 0));
+      }
+
+      const mvp = serverMvp || list[0] || this.player;
+
+      // Populate MVP Card in DOM
+      const nameEl = document.getElementById('mvp-player-name');
+      const titleEl = document.getElementById('mvp-player-title');
+      const killsEl = document.getElementById('mvp-stat-kills');
+      const deathsEl = document.getElementById('mvp-stat-deaths');
+      const kdEl = document.getElementById('mvp-stat-kd');
+      const scoreEl = document.getElementById('mvp-stat-score');
+      const bodyEl = document.getElementById('match-leaderboard-body');
+      const modalEl = document.getElementById('match-end-modal');
+
+      if (nameEl) nameEl.textContent = mvp.name || 'Operator';
+      if (titleEl) {
+        if ((mvp.kills || 0) >= 15) titleEl.textContent = '★ APEX PREDATOR ★';
+        else if ((mvp.kills || 0) >= 8) titleEl.textContent = '★ SHARPSHOOTER ★';
+        else titleEl.textContent = '★ COMBAT SPECIALIST ★';
+      }
+      if (killsEl) killsEl.textContent = mvp.kills || 0;
+      if (deathsEl) deathsEl.textContent = mvp.deaths || 0;
+      if (kdEl) {
+        const kd = (mvp.deaths || 0) > 0 ? ((mvp.kills || 0) / mvp.deaths).toFixed(2) : ((mvp.kills || 0)).toFixed(2);
+        kdEl.textContent = kd;
+      }
+      if (scoreEl) scoreEl.textContent = mvp.score || 0;
+
+      // Populate Leaderboard
+      if (bodyEl) {
+        bodyEl.innerHTML = '';
+        list.forEach((p, idx) => {
+          const tr = document.createElement('tr');
+          if (idx === 0) tr.className = 'rank-1';
+          else if (idx === 1) tr.className = 'rank-2';
+          else if (idx === 2) tr.className = 'rank-3';
+
+          if (p.id === this.player.id) tr.classList.add('is-local-player');
+
+          const kd = (p.deaths || 0) > 0 ? ((p.kills || 0) / p.deaths).toFixed(1) : (p.kills || 0).toFixed(1);
+          tr.innerHTML = `
+            <td>${idx === 0 ? '👑 1st' : (idx === 1 ? '🥈 2nd' : (idx === 2 ? '🥉 3rd' : `#${idx + 1}`))}</td>
+            <td>${p.name || 'Unknown'}${p.id === this.player.id ? ' (YOU)' : ''}</td>
+            <td>${p.kills || 0}</td>
+            <td>${p.deaths || 0}</td>
+            <td>${kd}</td>
+            <td>${p.score || 0}</td>
+          `;
+          bodyEl.appendChild(tr);
+        });
+      }
+
+      if (modalEl) modalEl.classList.remove('hidden');
+
+      // Countdown 10s for next round
+      let count = 10;
+      const countEl = document.getElementById('next-round-countdown');
+      if (this.nextRoundInterval) clearInterval(this.nextRoundInterval);
+      this.nextRoundInterval = setInterval(() => {
+        count--;
+        if (countEl) countEl.textContent = `NEXT ROUND IN ${count}s...`;
+        if (count <= 0) {
+          clearInterval(this.nextRoundInterval);
+          this.resetMatchForNextRound();
+        }
+      }, 1000);
+
+      const btnNext = document.getElementById('btn-next-round');
+      if (btnNext) {
+        btnNext.onclick = () => {
+          if (this.nextRoundInterval) clearInterval(this.nextRoundInterval);
+          this.resetMatchForNextRound();
+        };
+      }
+    }
+
+    resetMatchForNextRound() {
+      const modalEl = document.getElementById('match-end-modal');
+      if (modalEl) modalEl.classList.add('hidden');
+
+      this.roundTimeRemaining = this.roundDurationSec;
+      this.isMatchOver = false;
+
+      // Respawn player
+      const sp = this.map.getRandomSpawnPoint();
+      this.player.respawn(sp);
+
+      // Respawn local bots
+      for (const bot of this.localBots) {
+        bot.respawn(this.map.getRandomSpawnPoint());
+      }
+
+      // Clear bullets
+      this.bullets = [];
     }
 
     renderDeathScreen(ctx, w, h) {

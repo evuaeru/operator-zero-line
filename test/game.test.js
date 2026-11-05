@@ -127,6 +127,32 @@ async function runAll() {
     }
   });
 
+  await it('should produce seamless visibility polygon when facing directly West (no seam gap)', () => {
+    const testAngles = [Math.PI, -Math.PI, 3.0, -3.0, Math.PI - 0.05, -Math.PI + 0.05];
+    for (const testAngle of testAngles) {
+      const poly = raycaster.computeVisibilityPolygon(
+        843, 86,
+        testAngle,
+        (80 * Math.PI) / 180,
+        650,
+        100,
+        map.segments
+      );
+
+      assert.ok(poly.length >= 100, `Expected rich polygon, got ${poly.length}`);
+
+      const pFirst = poly[0];
+      const pLast = poly[poly.length - 1];
+      const seamDist = Math.hypot(pFirst.x - pLast.x, pFirst.y - pLast.y);
+      assert.ok(seamDist < 0.01, `Seam gap between start and end vertices must be zero (got ${seamDist}) at angle ${testAngle}`);
+
+      for (let i = 0; i < poly.length - 1; i++) {
+        const gap = poly[i + 1].angle - poly[i].angle;
+        assert.ok(gap < 0.06, `Angular gap between vertex ${i} and ${i+1} too large: ${gap} rad`);
+      }
+    }
+  });
+
   // 4. WEAPON & BALLISTICS TESTS
   console.log('\n4. Weapon Inventory & Ballistics:');
   const wm = new WeaponManager(GameConfig);
@@ -389,6 +415,19 @@ async function runAll() {
 
     const leakedShoot = clientOtherRoom.messages.find(m => m.type === 'shoot' && m.bullets && m.bullets[0].id === 'isolated_b');
     assert.strictEqual(leakedShoot, undefined, 'Messages from COMBAT_1 must not leak to COMBAT_2');
+  });
+
+  await it('should track round timer and broadcast MVP on round end', async () => {
+    const testRoom = getOrCreateRoom('TIMER_TEST_ROOM');
+    assert.strictEqual(typeof testRoom.roundTimeRemaining, 'number');
+    assert.strictEqual(testRoom.roundDurationSec, 180);
+
+    // Fast-forward timer to trigger round end
+    testRoom.roundTimeRemaining = 0.02;
+    await new Promise(r => setTimeout(r, 80));
+
+    assert.strictEqual(testRoom.isRoundOver, true);
+    assert.ok(testRoom.postRoundTimer > 0);
   });
 
   // Cleanup connections and server

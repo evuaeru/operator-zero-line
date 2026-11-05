@@ -18,8 +18,8 @@
 
     PLAYER: {
       RADIUS: 22,
-      SPEED: 4.0,
-      SPRINT_SPEED: 6.2,
+      SPEED: 2.8, // Smooth, deliberate tactical movement
+      SPRINT_SPEED: 4.4, // Controlled tactical sprint
       MAX_STAMINA: 100,
       STAMINA_DRAIN: 35, // per second
       STAMINA_RECOVER: 25, // per second

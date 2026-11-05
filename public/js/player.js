@@ -135,9 +135,10 @@
         this.stamina = Math.min(this.maxStamina, this.stamina + this.config.PLAYER.STAMINA_RECOVER * dt);
       }
 
+      const timeScale = Math.min(Math.max(dt * 60, 0.1), 3.0);
       const moveSpeed = this.isSprinting ? this.config.PLAYER.SPRINT_SPEED : this.config.PLAYER.SPEED;
 
-      // 3. Movement vector
+      // 3. Movement vector (normalized and framerate-independent)
       let mx = inputState.moveX;
       let my = inputState.moveY;
       const len = Math.hypot(mx, my);
@@ -145,17 +146,21 @@
       if (len > 0) {
         mx /= len;
         my /= len;
-        this.vx = mx * moveSpeed;
-        this.vy = my * moveSpeed;
+        this.vx = mx * moveSpeed * timeScale;
+        this.vy = my * moveSpeed * timeScale;
         this.isWalking = true;
-        this.walkCycle += this.isSprinting ? 0.35 : 0.22;
+        this.walkCycle += (this.isSprinting ? 0.28 : 0.16) * timeScale;
 
         if (soundManager) {
           soundManager.playFootstep();
         }
       } else {
-        this.vx *= 0.7;
-        this.vy *= 0.7;
+        this.vx *= Math.pow(0.5, timeScale);
+        this.vy *= Math.pow(0.5, timeScale);
+        if (Math.hypot(this.vx, this.vy) < 0.05) {
+          this.vx = 0;
+          this.vy = 0;
+        }
         this.isWalking = false;
       }
 

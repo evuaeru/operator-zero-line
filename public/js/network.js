@@ -28,6 +28,7 @@
       this.chatMessages = [];
 
       // Callbacks
+      this.serverRoundTime = null;
       this.onJoinedRoom = null;
       this.onKillEvent = null;
       this.onChatEvent = null;
@@ -37,6 +38,8 @@
       this.onBarrelExplodedEvent = null;
       this.onRespawnedEvent = null;
       this.onLocalStatsSync = null;
+      this.onRoundEndEvent = null;
+      this.onRoundStartEvent = null;
     }
 
     init(roomCode, playerName, playerColor, onJoined) {
@@ -232,9 +235,18 @@
             break;
 
           case 'kill':
+            msg.time = performance.now();
             this.killFeed.unshift(msg);
             if (this.killFeed.length > 5) this.killFeed.pop();
             if (this.onKillEvent) this.onKillEvent(msg);
+            break;
+
+          case 'round_end':
+            if (this.onRoundEndEvent) this.onRoundEndEvent(msg);
+            break;
+
+          case 'round_start':
+            if (this.onRoundStartEvent) this.onRoundStartEvent(msg);
             break;
 
           case 'chat':
@@ -249,6 +261,10 @@
     }
 
     syncGameState(msg) {
+      if (msg.roundTime !== undefined) {
+        this.serverRoundTime = msg.roundTime;
+      }
+
       // Sync local player stats if available
       const localSnap = msg.players ? msg.players.find(p => p.id === this.playerId) : null;
       if (localSnap && this.onLocalStatsSync) {
