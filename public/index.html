@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>OPERATOR: ZERO LINE | Tactical Top-Down Multiplayer Shooter</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- LOBBY & ROOM SELECTOR SCREEN -->
+  <div id="lobby-screen" class="screen">
+    <div class="lobby-card">
+      <div class="brand-header">
+        <h1>OPERATOR: ZERO LINE</h1>
+        <p>Tactical HTML5 Top-Down Shooter</p>
+        <div class="feature-badges">
+          <span class="badge">Dynamic Fog of War</span>
+          <span class="badge">2D Line of Sight</span>
+          <span class="badge">Multiplayer Mabar</span>
+          <span class="badge">Custom Sprites</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="player-name">Callsign / Operator Name</label>
+        <input type="text" id="player-name" class="input-field" placeholder="Enter your callsign (e.g. Ghost)" maxlength="16" value="Ghost_1">
+      </div>
+
+      <div class="form-group">
+        <label>Operator Camo / Armor Color</label>
+        <div id="color-picker" class="color-picker"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="room-code">Squad Room Code (Mabar)</label>
+        <input type="text" id="room-code" class="input-field" placeholder="e.g. ALPHA, BRAVO, SQUAD1" maxlength="12" value="SQUAD1">
+      </div>
+
+      <div class="action-buttons">
+        <button id="btn-start" class="btn btn-primary">DEPLOY SQUAD (MABAR)</button>
+        <button id="btn-practice" class="btn btn-secondary">SOLO / PRACTICE</button>
+      </div>
+
+      <div class="instructions-card">
+        <div><span>CONTROLS:</span> [W,A,S,D] Move • [Mouse] Aim • [Left Click] Shoot</div>
+        <div><span>TACTICAL:</span> [F] Flashlight • [R] Reload • [1-5 / Wheel] Weapons</div>
+        <div><span>MOBILITY:</span> [Shift / Space] Tactical Sprint • [Tab] Scoreboard • [Enter] Chat</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTIVE IN-GAME VIEWPORT & HUD -->
+  <div id="game-container" class="screen hidden">
+    <!-- Game Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- In-Game Top Bar -->
+    <div class="top-bar">
+      <div id="hud-room-code" class="hud-badge">ROOM: SQUAD1</div>
+      <button id="btn-copy-invite" class="btn-pill" title="Copy room link for friends">📋 COPY INVITE LINK</button>
+      <button id="btn-toggle-bots" class="btn-pill" title="Add or remove AI bots">🤖 TOGGLE BOTS</button>
+      <div id="hud-ping" class="hud-badge" style="color: #4ade80;">PING: --</div>
+    </div>
+
+    <!-- In-Game Chat Box -->
+    <div id="chat-container">
+      <div id="chat-messages">
+        <div class="chat-message"><span class="chat-sender">HQ:</span> Tactical link established. Press [Enter] to chat.</div>
+      </div>
+      <input type="text" id="chat-input" placeholder="Press Enter to send squad message..." maxlength="100">
+    </div>
+  </div>
+
+  <!-- Toast Notification Popup -->
+  <div id="toast">Notification</div>
+
+  <!-- Game Scripts in strict dependency order -->
+  <script src="js/config.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/raycast.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/particles.js"></script>
+  <script src="js/weapons.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/bot.js"></script>
+  <script src="js/network.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

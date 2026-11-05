@@ -1,0 +1,14 @@
+{
+  "name": "topdown-shooter-multiplayer",
+  "version": "1.0.0",
+  "description": "Tactical HTML5 Top-Down Shooter with Line of Sight, Dynamic Fog of War, and Realtime Multiplayer",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/game.test.js && node test/edge_cases.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  }
+}
